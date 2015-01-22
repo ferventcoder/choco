@@ -20,22 +20,8 @@ namespace chocolatey.infrastructure.app.services
     using configuration;
     using results;
 
-    public interface INugetService
+    public interface INugetService : ISourceRunner
     {
-        /// <summary>
-        ///   Run list in noop mode
-        /// </summary>
-        /// <param name="config">The configuration.</param>
-        void list_noop(ChocolateyConfiguration config);
-
-        /// <summary>
-        ///   Lists/searches for pacakge against nuget related feeds.
-        /// </summary>
-        /// <param name="config">The configuration.</param>
-        /// <param name="logResults">Should results be logged?</param>
-        /// <returns></returns>
-        ConcurrentDictionary<string, PackageResult> list_run(ChocolateyConfiguration config, bool logResults);
-
         /// <summary>
         ///   Run pack in noop mode.
         /// </summary>
@@ -59,21 +45,6 @@ namespace chocolatey.infrastructure.app.services
         /// </summary>
         /// <param name="config">The configuration.</param>
         void push_run(ChocolateyConfiguration config);
-
-        /// <summary>
-        ///   Run install in noop mode
-        /// </summary>
-        /// <param name="config">The configuration.</param>
-        /// <param name="continueAction">The action to continue with for each noop test install.</param>
-        void install_noop(ChocolateyConfiguration config, Action<PackageResult> continueAction);
-
-        /// <summary>
-        ///   Installs packages from NuGet related feeds
-        /// </summary>
-        /// <param name="config">The configuration.</param>
-        /// <param name="continueAction">The action to continue with when install is successful.</param>
-        /// <returns>results of installs</returns>
-        ConcurrentDictionary<string, PackageResult> install_run(ChocolateyConfiguration config, Action<PackageResult> continueAction);
 
         /// <summary>
         ///   Run upgrade in noop mode

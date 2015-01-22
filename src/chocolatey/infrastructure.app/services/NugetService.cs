@@ -24,6 +24,7 @@ namespace chocolatey.infrastructure.app.services
     using adapters;
     using commandline;
     using configuration;
+    using domain;
     using guards;
     using logging;
     using nuget;
@@ -38,11 +39,11 @@ namespace chocolatey.infrastructure.app.services
         private readonly IFileSystem _fileSystem;
         private readonly ILogger _nugetLogger;
         private readonly IChocolateyPackageInformationService _packageInfoService;
-        private readonly Lazy<IDateTime> datetime_initializer = new Lazy<IDateTime>(() => new DateTime());
+        private readonly Lazy<IDateTime> _datetimeInitializer = new Lazy<IDateTime>(() => new DateTime());
 
         private IDateTime DateTime
         {
-            get { return datetime_initializer.Value; }
+            get { return _datetimeInitializer.Value; }
         }
 
         /// <summary>
@@ -56,6 +57,16 @@ namespace chocolatey.infrastructure.app.services
             _fileSystem = fileSystem;
             _nugetLogger = nugetLogger;
             _packageInfoService = packageInfoService;
+        }
+
+        public SourceType SourceType
+        {
+            get { return SourceType.normal; }
+        }
+
+        public void ensure_source_app_installed(ChocolateyConfiguration config, Action<PackageResult> ensureAction)
+        {
+            // nothing to do. Nuget.Core is already part of Chocolatey
         }
 
         public void list_noop(ChocolateyConfiguration config)
