@@ -104,6 +104,7 @@
     <Compile Include="infrastructure.app\services\IChocolateyConfigSettingsService.cs" />
     <Compile Include="infrastructure.app\configuration\ConfigFileApiKeySetting.cs" />
     <Compile Include="infrastructure.app\nuget\NugetEncryptionUtility.cs" />
+    <Compile Include="infrastructure.app\services\ISourceRunner.cs" />
     <Compile Include="infrastructure.app\services\ITemplateService.cs" />
     <Compile Include="infrastructure.app\domain\ChocolateyPackageInformation.cs" />
     <Compile Include="infrastructure.app\domain\CustomInstaller.cs" />
@@ -166,7 +167,7 @@
     <Compile Include="infrastructure.app\ApplicationParameters.cs" />
     <Compile Include="infrastructure\commands\ExternalCommandArgsBuilder.cs" />
     <Compile Include="infrastructure\commands\ExternalCommandArgument.cs" />
-    <Compile Include="infrastructure.app\domain\SpecialSourceType.cs" />
+    <Compile Include="infrastructure.app\domain\SourceType.cs" />
     <Compile Include="infrastructure\extractors\AssemblyFileExtractor.cs" />
     <Compile Include="infrastructure.app\builders\ConfigurationBuilder.cs" />
     <Compile Include="infrastructure.app\commands\ChocolateyListCommand.cs" />
