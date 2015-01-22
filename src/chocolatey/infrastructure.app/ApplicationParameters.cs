@@ -51,6 +51,7 @@ namespace chocolatey.infrastructure.app
         public static string ShimsLocation = _fileSystem.combine_paths(InstallLocation, "bin");
         public static string ChocolateyPackageInfoStoreLocation = _fileSystem.combine_paths(InstallLocation, ".chocolatey");
         public static readonly string ChocolateyCommunityFeedPushSource = "https://chocolatey.org/";
+        public static readonly string ChocolateyCommunityFeedSource = "https://chocolatey.org/api/v2/";
         public static readonly string UserAgent = "Chocolatey Command Line";
         public static readonly string RegistryValueInstallLocation = "InstallLocation";
         public static readonly string RollbackPackageSuffix = "._.previous";
@@ -77,6 +78,11 @@ namespace chocolatey.infrastructure.app
         {
             public static readonly string ContinueChocolateyAction = "Moving forward with chocolatey actions.";
             public static readonly string NugetEventActionHeader = "Nuget called an event";
+        }
+
+        public static class SourceRunner
+        {
+            public static readonly string WebPiPackage = "webpicmd";
         }
 
         public static class OutputParser
