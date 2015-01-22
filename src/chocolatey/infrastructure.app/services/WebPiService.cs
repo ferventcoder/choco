@@ -20,26 +20,25 @@ namespace chocolatey.infrastructure.app.services
     using System.Collections.Generic;
     using System.Text.RegularExpressions;
     using configuration;
+    using domain;
     using infrastructure.commands;
     using logging;
     using results;
-
-    public interface IWebPiService
-    {
-    }
-
+    
     //todo this is the old nuget.exe installer code that needs cleaned up for webpi
-    public class WebPiService : IWebPiService
+    public class WebPiService : ISourceRunner
     {
         private readonly ICommandExecutor _commandExecutor;
+        private readonly INugetService _nugetService;
         private const string PACKAGE_NAME_TOKEN = "{{packagename}}";
         private readonly string _webPiExePath = "webpicmd"; //ApplicationParameters.Tools.NugetExe;
         private readonly IDictionary<string, ExternalCommandArgument> _webPiListArguments = new Dictionary<string, ExternalCommandArgument>(StringComparer.InvariantCultureIgnoreCase);
         private readonly IDictionary<string, ExternalCommandArgument> _webPiInstallArguments = new Dictionary<string, ExternalCommandArgument>(StringComparer.InvariantCultureIgnoreCase);
 
-        public WebPiService(ICommandExecutor commandExecutor)
+        public WebPiService(ICommandExecutor commandExecutor, INugetService nugetService)
         {
             _commandExecutor = commandExecutor;
+            _nugetService = nugetService;
             set_cmd_args_dictionaries();
         }
 
@@ -71,6 +70,43 @@ namespace chocolatey.infrastructure.app.services
             _webPiInstallArguments.Add("Prerelease", new ExternalCommandArgument {ArgumentOption = "-prerelease"});
             _webPiInstallArguments.Add("_non_interactive_", new ExternalCommandArgument {ArgumentOption = "-noninteractive", Required = true});
             _webPiInstallArguments.Add("_no_cache_", new ExternalCommandArgument {ArgumentOption = "-nocache", Required = true});
+        }
+
+        public SourceType SourceType
+        {
+            get { return SourceType.webpi; }
+        }
+
+        public void ensure_source_app_installed(ChocolateyConfiguration config, Action<PackageResult> ensureAction)
+        {
+            var runnerConfig = new ChocolateyConfiguration()
+                {
+                    CommandName = "install",
+                    PackageNames = ApplicationParameters.SourceRunner.WebPiPackage,
+                    Sources = ApplicationParameters.ChocolateyCommunityFeedSource,
+                    Debug = config.Debug,
+                    Force = config.Force,
+                    Verbose = config.Verbose,
+                    CommandExecutionTimeoutSeconds = config.CommandExecutionTimeoutSeconds,
+                    CacheLocation = config.CacheLocation,
+                    RegularOuptut = config.RegularOuptut,
+                };
+
+            _nugetService.install_run(runnerConfig, ensureAction.Invoke);
+        }
+
+        public void list_noop(ChocolateyConfiguration config)
+        {
+            
+        }
+
+        public ConcurrentDictionary<string, PackageResult> list_run(ChocolateyConfiguration config, bool logResults)
+        {
+            return new ConcurrentDictionary<string, PackageResult>();
+        }
+
+        public void install_noop(ChocolateyConfiguration config, Action<PackageResult> continueAction)
+        {
         }
 
         public ConcurrentDictionary<string, PackageResult> install_run(ChocolateyConfiguration configuration, Action<PackageResult> continueAction)
