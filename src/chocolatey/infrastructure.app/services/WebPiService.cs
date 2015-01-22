@@ -80,19 +80,26 @@ namespace chocolatey.infrastructure.app.services
         public void ensure_source_app_installed(ChocolateyConfiguration config, Action<PackageResult> ensureAction)
         {
             var runnerConfig = new ChocolateyConfiguration()
-                {
-                    CommandName = "install",
-                    PackageNames = ApplicationParameters.SourceRunner.WebPiPackage,
-                    Sources = ApplicationParameters.ChocolateyCommunityFeedSource,
-                    Debug = config.Debug,
-                    Force = config.Force,
-                    Verbose = config.Verbose,
-                    CommandExecutionTimeoutSeconds = config.CommandExecutionTimeoutSeconds,
-                    CacheLocation = config.CacheLocation,
-                    RegularOuptut = config.RegularOuptut,
-                };
+            {
+                PackageNames = ApplicationParameters.SourceRunner.WebPiPackage,
+                Sources = ApplicationParameters.PackagesLocation,
+                Debug = config.Debug,
+                Force = config.Force,
+                Verbose = config.Verbose,
+                CommandExecutionTimeoutSeconds = config.CommandExecutionTimeoutSeconds,
+                CacheLocation = config.CacheLocation,
+                RegularOuptut = config.RegularOuptut,
+            };
+            runnerConfig.ListCommand.LocalOnly = true;
 
-            _nugetService.install_run(runnerConfig, ensureAction.Invoke);
+            var localPackages = _nugetService.list_run(runnerConfig, logResults: false);
+
+            if (!localPackages.ContainsKey(ApplicationParameters.SourceRunner.WebPiPackage))
+            {
+                runnerConfig.Sources = ApplicationParameters.ChocolateyCommunityFeedSource;
+                
+                _nugetService.install_run(runnerConfig, ensureAction.Invoke);
+            }
         }
 
         public void list_noop(ChocolateyConfiguration config)
