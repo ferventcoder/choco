@@ -18,7 +18,9 @@ namespace chocolatey.infrastructure.app.services
     using System;
     using System.Collections.Concurrent;
     using System.Collections.Generic;
+    using System.IO;
     using System.Linq;
+    using System.Threading;
     using commandline;
     using configuration;
     using domain;
@@ -31,6 +33,7 @@ namespace chocolatey.infrastructure.app.services
     public class ChocolateyPackageService : IChocolateyPackageService
     {
         private readonly INugetService _nugetService;
+        private readonly IEnumerable<ISourceRunner> _sourceRunners;
         private readonly IPowershellService _powershellService;
         private readonly IShimGenerationService _shimgenService;
         private readonly IFileSystem _fileSystem;
@@ -42,6 +45,7 @@ namespace chocolatey.infrastructure.app.services
         public ChocolateyPackageService(INugetService nugetService, IPowershellService powershellService, IShimGenerationService shimgenService, IFileSystem fileSystem, IRegistryService registryService, IChocolateyPackageInformationService packageInfoService, IAutomaticUninstallerService autoUninstallerService, IXmlService xmlService)
         {
             _nugetService = nugetService;
+            _sourceRunners = sourceRunners;
             _powershellService = powershellService;
             _shimgenService = shimgenService;
             _fileSystem = fileSystem;
@@ -51,32 +55,59 @@ namespace chocolatey.infrastructure.app.services
             _xmlService = xmlService;
         }
 
-        public void list_noop(ChocolateyConfiguration config)
+        public void ensure_source_app_installed(ChocolateyConfiguration config)
         {
-            if (config.Sources.is_equal_to(SpecialSourceType.webpi.to_string()))
+            perform_source_runner_action(config, r => r.ensure_source_app_installed(config, (packageResult) => handle_package_result(packageResult, config, CommandNameType.install)));
+        }
+
+        private void perform_source_runner_action(ChocolateyConfiguration config, Action<ISourceRunner> action)
+        {
+            var runner = _sourceRunners.FirstOrDefault(r => r.SourceType == config.SourceType);
+            if (runner != null && action != null)
             {
-                //todo: webpi
+                action.Invoke(runner);
             }
             else
             {
-                _nugetService.list_noop(config);
+                this.Log().Warn("No runner was found that implements source type '{0}' or action was missing".format_with(config.SourceType.to_string()));
             }
+        } 
+        
+        private T perform_source_runner_function<T>(ChocolateyConfiguration config, Func<ISourceRunner,T> function)
+        {
+            var runner = _sourceRunners.FirstOrDefault(r => r.SourceType == config.SourceType);
+            if (runner != null && function != null)
+            {
+                return function.Invoke(runner);
+            }
+           
+            this.Log().Warn("No runner was found that implements source type '{0}' or function was missing.".format_with(config.SourceType.to_string()));
+            return default(T);
+        }
+
+        public void list_noop(ChocolateyConfiguration config)
+        {
+            perform_source_runner_action(config, r => r.list_noop(config));
+
+            //switch (config.SourceType)
+            //{
+            //    case SourceType.normal:
+            //        _nugetService.list_noop(config);
+            //        break;
+            //    default:
+            //        perform_source_runner_action(config,r => r.list_noop(config));
+            //        break;
+            //}
         }
 
         public void list_run(ChocolateyConfiguration config, bool logResults)
         {
             this.Log().Debug(() => "Searching for package information");
 
-            if (config.Sources.is_equal_to(SpecialSourceType.webpi.to_string()))
+            var list = perform_source_runner_function(config, r => r.list_run(config, logResults));
+
+            if (config.SourceType == SourceType.normal)
             {
-                //todo: webpi
-                //install webpi if not installed
-                //run the webpi command 
-                this.Log().Warn("Command not yet functional, stay tuned...");
-            }
-            else
-            {
-                var list = _nugetService.list_run(config, logResults: true);
                 if (config.RegularOuptut)
                 {
                     this.Log().Warn(() => @"{0} packages {1}.".format_with(list.Count, config.ListCommand.LocalOnly ? "installed" : "found"));
