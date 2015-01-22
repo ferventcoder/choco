@@ -21,6 +21,7 @@ namespace chocolatey.infrastructure.app.runners
     using adapters;
     using attributes;
     using configuration;
+    using domain;
     using infrastructure.commands;
     using logging;
     using Console = System.Console;
@@ -53,6 +54,8 @@ namespace chocolatey.infrastructure.app.runners
                 {
                     parseArgs.Invoke(command);
                 }
+
+                set_source_type(config);
 
                 this.Log().Debug(() => "Configuration: {0}".format_with(config.ToString()));
 
@@ -103,6 +106,13 @@ choco.exe is not an official build (bypassed with --allow-unofficial).
                     command.run(config);
                 }
             }
+        }
+
+        private static void set_source_type(ChocolateyConfiguration config)
+        {
+            var sourceType = SourceType.normal;
+            Enum.TryParse(config.Sources, true, out sourceType);
+            config.SourceType = sourceType;
         }
     }
 }

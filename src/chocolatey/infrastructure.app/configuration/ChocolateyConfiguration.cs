@@ -33,6 +33,7 @@ namespace chocolatey.infrastructure.app.configuration
         {
             RegularOuptut = true;
             PromptForConfirmation = true;
+            SourceType = SourceType.normal;
             Information = new InformationCommandConfiguration();
             Features = new FeaturesConfiguration();
             NewCommand = new NewCommandConfiguration();
@@ -142,6 +143,7 @@ NOTE: Hiding sensitive configuration data! Please double and triple
         ///   One or more source locations set by configuration or by command line. Separated by semi-colon
         /// </summary>
         public string Sources { get; set; }
+        public SourceType SourceType { get; set; }
 
         // top level commands
 
