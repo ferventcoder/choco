@@ -66,5 +66,35 @@ namespace chocolatey.infrastructure.app.services
         /// <param name="continueAction">The action to continue with when install is successful.</param>
         /// <returns>results of installs</returns>
         ConcurrentDictionary<string, PackageResult> install_run(ChocolateyConfiguration config, Action<PackageResult> continueAction);
+
+        /// <summary>
+        ///   Run upgrade in noop mode
+        /// </summary>
+        /// <param name="config">The configuration.</param>
+        /// <param name="continueAction">The action to continue with for each noop test upgrade.</param>
+        ConcurrentDictionary<string, PackageResult> upgrade_noop(ChocolateyConfiguration config, Action<PackageResult> continueAction);
+        
+        /// <summary>
+        ///   Upgrades packages from NuGet related feeds
+        /// </summary>
+        /// <param name="config">The configuration.</param>
+        /// <param name="continueAction">The action to continue with when upgrade is successful.</param>
+        /// <returns>results of installs</returns>
+        ConcurrentDictionary<string, PackageResult> upgrade_run(ChocolateyConfiguration config, Action<PackageResult> continueAction);
+
+        /// <summary>
+        ///   Run uninstall in noop mode
+        /// </summary>
+        /// <param name="config">The configuration.</param>
+        /// <param name="continueAction">The action to continue with for each noop test upgrade.</param>
+        void uninstall_noop(ChocolateyConfiguration config, Action<PackageResult> continueAction);
+
+        /// <summary>
+        ///   Uninstalls packages from NuGet related feeds
+        /// </summary>
+        /// <param name="config">The configuration.</param>
+        /// <param name="continueAction">The action to continue with when upgrade is successful.</param>
+        /// <returns>results of installs</returns>
+        ConcurrentDictionary<string, PackageResult> uninstall_run(ChocolateyConfiguration config, Action<PackageResult> continueAction);
     }
 }
