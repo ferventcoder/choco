@@ -71,16 +71,16 @@ namespace chocolatey.infrastructure.app.services
             {
                 this.Log().Warn("No runner was found that implements source type '{0}' or action was missing".format_with(config.SourceType.to_string()));
             }
-        } 
-        
-        private T perform_source_runner_function<T>(ChocolateyConfiguration config, Func<ISourceRunner,T> function)
+        }
+
+        private T perform_source_runner_function<T>(ChocolateyConfiguration config, Func<ISourceRunner, T> function)
         {
             var runner = _sourceRunners.FirstOrDefault(r => r.SourceType == config.SourceType);
             if (runner != null && function != null)
             {
                 return function.Invoke(runner);
             }
-           
+
             this.Log().Warn("No runner was found that implements source type '{0}' or function was missing.".format_with(config.SourceType.to_string()));
             return default(T);
         }
@@ -88,16 +88,6 @@ namespace chocolatey.infrastructure.app.services
         public void list_noop(ChocolateyConfiguration config)
         {
             perform_source_runner_action(config, r => r.list_noop(config));
-
-            //switch (config.SourceType)
-            //{
-            //    case SourceType.normal:
-            //        _nugetService.list_noop(config);
-            //        break;
-            //    default:
-            //        perform_source_runner_action(config,r => r.list_noop(config));
-            //        break;
-            //}
         }
 
         public void list_run(ChocolateyConfiguration config, bool logResults)
@@ -154,31 +144,237 @@ namespace chocolatey.infrastructure.app.services
 
         public void pack_noop(ChocolateyConfiguration config)
         {
+            if (config.SourceType != SourceType.normal)
+            {
+                this.Log().Warn(ChocolateyLoggers.Important, "This source doesn't provide a facility for packaging.");
+                return;
+            }
+
             _nugetService.pack_noop(config);
         }
 
         public void pack_run(ChocolateyConfiguration config)
         {
+            if (config.SourceType != SourceType.normal)
+            {
+                this.Log().Warn(ChocolateyLoggers.Important, "This source doesn't provide a facility for packaging.");
+                return;
+            }
+
             _nugetService.pack_run(config);
         }
 
         public void push_noop(ChocolateyConfiguration config)
         {
+            if (config.SourceType != SourceType.normal)
+            {
+                this.Log().Warn(ChocolateyLoggers.Important, "This source doesn't provide a facility for pushing.");
+                return;
+            }
+
             _nugetService.push_noop(config);
         }
 
         public void push_run(ChocolateyConfiguration config)
         {
+            if (config.SourceType != SourceType.normal)
+            {
+                this.Log().Warn(ChocolateyLoggers.Important, "This source doesn't provide a facility for pushing.");
+                return;
+            }
+
             _nugetService.push_run(config);
         }
 
         public void install_noop(ChocolateyConfiguration config)
         {
-            // each package can specify its own configuration values    
-            foreach (var packageConfig in set_config_from_package_names_and_packages_config(config, new ConcurrentDictionary<string, PackageResult>()).or_empty_list_if_null())
+            Action<PackageResult> action = null;
+            if (config.SourceType == SourceType.normal)
             {
-                _nugetService.install_noop(packageConfig, (pkg) => _powershellService.install_noop(pkg));
+                action = (pkg) => _powershellService.install_noop(pkg);
             }
+            
+            perform_source_runner_action(config, r => r.install_noop(config, action));
+        }
+
+        public ConcurrentDictionary<string, PackageResult> install_run(ChocolateyConfiguration config)
+        {
+            //todo:are we installing from an alternate source? If so run that command instead
+
+            this.Log().Info(@"Installing the following packages:");
+            this.Log().Info(ChocolateyLoggers.Important, @"{0}".format_with(config.PackageNames));
+            this.Log().Info(@"By installing you accept licenses for the packages.");
+
+            Action<PackageResult> action = null;
+            if (config.SourceType == SourceType.normal)
+            {
+                action = (packageResult) => handle_package_result(packageResult, config, CommandNameType.install);
+            }
+
+            var packageInstalls = new ConcurrentDictionary<string, PackageResult>();
+
+            foreach (var packageConfig in set_config_from_package_names_and_packages_config(config, packageInstalls).or_empty_list_if_null())
+            {
+               var results =  perform_source_runner_function(packageConfig, r => r.install_run(packageConfig, action));
+                foreach (var result in results)
+                {
+                    packageInstalls.GetOrAdd(result.Key, result.Value);
+                }
+            }
+
+            var installFailures = packageInstalls.Count(p => !p.Value.Success);
+            var installWarnings = packageInstalls.Count(p => p.Value.Warning);
+            this.Log().Warn(() => @"{0}{1} installed {2}/{3} package(s). {4} package(s) failed.{5}{0} See the log for details.".format_with(
+                Environment.NewLine,
+                ApplicationParameters.Name,
+                packageInstalls.Count(p => p.Value.Success && !p.Value.Inconclusive),
+                packageInstalls.Count,
+                installFailures,
+                installWarnings == 0 ? string.Empty : "{0} {1} package(s) had warnings.".format_with(Environment.NewLine, installWarnings)));
+
+            if (installWarnings != 0)
+            {
+                this.Log().Warn(ChocolateyLoggers.Important, "Warnings:");
+                foreach (var warning in packageInstalls.Where(p => p.Value.Warning).or_empty_list_if_null())
+                {
+                    this.Log().Warn(ChocolateyLoggers.Important, " - {0}".format_with(warning.Value.Name));
+                }
+            }
+
+            if (installFailures != 0)
+            {
+                this.Log().Error("Failures:");
+                foreach (var failure in packageInstalls.Where(p => !p.Value.Success).or_empty_list_if_null())
+                {
+                    this.Log().Error(" - {0}".format_with(failure.Value.Name));
+                }
+            }
+
+            if (installFailures != 0 && Environment.ExitCode == 0)
+            {
+                Environment.ExitCode = 1;
+            }
+
+            return packageInstalls;
+        }
+
+
+        public void upgrade_noop(ChocolateyConfiguration config)
+        {
+            Action<PackageResult> action = null;
+            if (config.SourceType == SourceType.normal)
+            {
+                action = (pkg) => _powershellService.install_noop(pkg);
+            }
+
+            var noopUpgrades = perform_source_runner_function(config, r => r.upgrade_noop(config, action));
+            if (config.RegularOuptut)
+            {
+                this.Log().Warn(() => @"{0}There are {1} packages available for upgrade.{0} See the log for details.".format_with(
+                Environment.NewLine,
+                noopUpgrades.Count));
+            }
+        }
+
+        public ConcurrentDictionary<string, PackageResult> upgrade_run(ChocolateyConfiguration config)
+        {
+            //todo:are we upgrading an alternate source? If so run that command instead
+
+            this.Log().Info(@"Upgrading the following packages:");
+            this.Log().Info(ChocolateyLoggers.Important, @"{0}".format_with(config.PackageNames));
+            this.Log().Info(@"By installing you accept licenses for the packages.");
+
+            Action<PackageResult> action = null;
+            if (config.SourceType == SourceType.normal)
+            {
+                action =  (packageResult) => handle_package_result(packageResult, config, CommandNameType.upgrade);
+            }
+
+            var packageUpgrades = perform_source_runner_function(config, r => r.upgrade_run(config, action));
+            
+            var upgradeFailures = packageUpgrades.Count(p => !p.Value.Success);
+            var upgradeWarnings = packageUpgrades.Count(p => p.Value.Warning);
+            this.Log().Warn(() => @"{0}{1} upgraded {2}/{3} package(s). {4} package(s) failed.{5}{0} See the log for details.".format_with(
+                Environment.NewLine,
+                ApplicationParameters.Name,
+                packageUpgrades.Count(p => p.Value.Success && !p.Value.Inconclusive),
+                packageUpgrades.Count,
+                upgradeFailures,
+                upgradeWarnings == 0 ? string.Empty : "{0} {1} package(s) had warnings.".format_with(Environment.NewLine, upgradeWarnings)));
+
+            if (upgradeWarnings != 0)
+            {
+                this.Log().Warn(ChocolateyLoggers.Important, "Warnings:");
+                foreach (var warning in packageUpgrades.Where(p => p.Value.Warning).or_empty_list_if_null())
+                {
+                    this.Log().Warn(ChocolateyLoggers.Important, " - {0}".format_with(warning.Value.Name));
+                }
+            }
+
+            if (upgradeFailures != 0)
+            {
+                this.Log().Error("Failures:");
+                foreach (var failure in packageUpgrades.Where(p => !p.Value.Success).or_empty_list_if_null())
+                {
+                    this.Log().Error(" - {0}".format_with(failure.Value.Name));
+                }
+            }
+
+            if (upgradeFailures != 0 && Environment.ExitCode == 0)
+            {
+                Environment.ExitCode = 1;
+            }
+
+            return packageUpgrades;
+        }
+
+        public void uninstall_noop(ChocolateyConfiguration config)
+        {
+            Action<PackageResult> action = null;
+            if (config.SourceType == SourceType.normal)
+            {
+            _nugetService.install_noop(config, (pkg) => _powershellService.install_noop(pkg));
+            }
+
+            perform_source_runner_action(config, r => r.uninstall_noop(config, action));
+        }
+
+        public ConcurrentDictionary<string, PackageResult> uninstall_run(ChocolateyConfiguration config)
+        {
+            this.Log().Info(@"Uninstalling the following packages:");
+            this.Log().Info(ChocolateyLoggers.Important, @"{0}".format_with(config.PackageNames));
+
+            Action<PackageResult> action = null;
+            if (config.SourceType == SourceType.normal)
+            {
+                action = (packageResult) => handle_package_uninstall(packageResult, config);
+            }
+
+            var packageUninstalls = perform_source_runner_function(config, r => r.uninstall_run(config, action));
+
+            var uninstallFailures = packageUninstalls.Count(p => !p.Value.Success);
+            this.Log().Warn(() => @"{0}{1} uninstalled {2}/{3} packages. {4} packages failed.{0}See the log for details.".format_with(
+                Environment.NewLine,
+                ApplicationParameters.Name,
+                packageUninstalls.Count(p => p.Value.Success && !p.Value.Inconclusive),
+                packageUninstalls.Count,
+                uninstallFailures));
+
+            if (uninstallFailures != 0)
+            {
+                this.Log().Error("Failures");
+                foreach (var failure in packageUninstalls.Where(p => !p.Value.Success).or_empty_list_if_null())
+                {
+                    this.Log().Error(" - {0}".format_with(failure.Value.Name));
+                }
+            }
+
+            if (uninstallFailures != 0 && Environment.ExitCode == 0)
+            {
+                Environment.ExitCode = 1;
+            }
+
+            return packageUninstalls;
         }
 
         public void handle_package_result(PackageResult packageResult, ChocolateyConfiguration config, CommandNameType commandName)
@@ -240,65 +436,6 @@ namespace chocolatey.infrastructure.app.services
             this.Log().Info(ChocolateyLoggers.Important, " {0} has been {1}ed successfully.".format_with(packageResult.Name, commandName.to_string()));
         }
 
-        public ConcurrentDictionary<string, PackageResult> install_run(ChocolateyConfiguration config)
-        {
-            //todo:are we installing from an alternate source? If so run that command instead
-
-            this.Log().Info(@"Installing the following packages:");
-            this.Log().Info(ChocolateyLoggers.Important, @"{0}".format_with(config.PackageNames));
-            this.Log().Info(@"By installing you accept licenses for the packages.");
-
-
-            var packageInstalls = new ConcurrentDictionary<string, PackageResult>();
-
-            foreach (var packageConfig in set_config_from_package_names_and_packages_config(config, packageInstalls).or_empty_list_if_null())
-            {
-                var results = _nugetService.install_run(
-                    packageConfig,
-                    (packageResult) => handle_package_result(packageResult, packageConfig, CommandNameType.install)
-                    );
-                foreach (var result in results)
-                {
-                    packageInstalls.GetOrAdd(result.Key, result.Value);
-                }
-            }
-
-            var installFailures = packageInstalls.Count(p => !p.Value.Success);
-            var installWarnings = packageInstalls.Count(p => p.Value.Warning);
-            this.Log().Warn(() => @"{0}{1} installed {2}/{3} package(s). {4} package(s) failed.{5}{0} See the log for details.".format_with(
-                Environment.NewLine,
-                ApplicationParameters.Name,
-                packageInstalls.Count(p => p.Value.Success && !p.Value.Inconclusive),
-                packageInstalls.Count,
-                installFailures,
-                installWarnings == 0 ? string.Empty : "{0} {1} package(s) had warnings.".format_with(Environment.NewLine, installWarnings)));
-
-            if (installWarnings != 0)
-            {
-                this.Log().Warn(ChocolateyLoggers.Important, "Warnings:");
-                foreach (var warning in packageInstalls.Where(p => p.Value.Warning).or_empty_list_if_null())
-                {
-                    this.Log().Warn(ChocolateyLoggers.Important, " - {0}".format_with(warning.Value.Name));
-                }
-            }
-
-            if (installFailures != 0)
-            {
-                this.Log().Error("Failures:");
-                foreach (var failure in packageInstalls.Where(p => !p.Value.Success).or_empty_list_if_null())
-                {
-                    this.Log().Error(" - {0}".format_with(failure.Value.Name));
-                }
-            }
-
-            if (installFailures != 0 && Environment.ExitCode == 0)
-            {
-                Environment.ExitCode = 1;
-            }
-
-            return packageInstalls;
-        }
-
         private IEnumerable<ChocolateyConfiguration> set_config_from_package_names_and_packages_config(ChocolateyConfiguration config, ConcurrentDictionary<string, PackageResult> packageInstalls)
         {
             // if there are any .config files, split those off of the config. Then return the config without those package names.
@@ -351,126 +488,29 @@ namespace chocolatey.infrastructure.app.services
             return packageConfigs;
         }
 
-        public void upgrade_noop(ChocolateyConfiguration config)
+        public void handle_package_uninstall(PackageResult packageResult, ChocolateyConfiguration config)
         {
-            var noopUpgrades = _nugetService.upgrade_noop(config, (pkg) => _powershellService.install_noop(pkg));
-            if (config.RegularOuptut)
+            if (!_fileSystem.directory_exists(packageResult.InstallLocation))
             {
-                this.Log().Warn(() => @"{0}There are {1} packages available for upgrade.{0} See the log for details.".format_with(
-              Environment.NewLine,
-              noopUpgrades.Count));
-            }
-        }
-
-        public ConcurrentDictionary<string, PackageResult> upgrade_run(ChocolateyConfiguration config)
-        {
-            //todo:are we upgrading an alternate source? If so run that command instead
-
-            this.Log().Info(@"Upgrading the following packages:");
-            this.Log().Info(ChocolateyLoggers.Important, @"{0}".format_with(config.PackageNames));
-            this.Log().Info(@"By installing you accept licenses for the packages.");
-
-            var packageUpgrades = _nugetService.upgrade_run(
-                config,
-                (packageResult) => handle_package_result(packageResult, config, CommandNameType.upgrade)
-                );
-
-            var upgradeFailures = packageUpgrades.Count(p => !p.Value.Success);
-            var upgradeWarnings = packageUpgrades.Count(p => p.Value.Warning);
-            this.Log().Warn(() => @"{0}{1} upgraded {2}/{3} package(s). {4} package(s) failed.{5}{0} See the log for details.".format_with(
-                Environment.NewLine,
-                ApplicationParameters.Name,
-                packageUpgrades.Count(p => p.Value.Success && !p.Value.Inconclusive),
-                packageUpgrades.Count,
-                upgradeFailures,
-                upgradeWarnings == 0 ? string.Empty : "{0} {1} package(s) had warnings.".format_with(Environment.NewLine, upgradeWarnings)));
-
-            if (upgradeWarnings != 0)
-            {
-                this.Log().Warn(ChocolateyLoggers.Important,"Warnings:");
-                foreach (var warning in packageUpgrades.Where(p => p.Value.Warning).or_empty_list_if_null())
-                {
-                    this.Log().Warn(ChocolateyLoggers.Important, " - {0}".format_with(warning.Value.Name));
-                }
-            }    
-            
-            if (upgradeFailures != 0)
-            {
-                this.Log().Error("Failures:");
-                foreach (var failure in packageUpgrades.Where(p => !p.Value.Success).or_empty_list_if_null())
-                {
-                    this.Log().Error(" - {0}".format_with(failure.Value.Name));
-                }
+                packageResult.InstallLocation += ".{0}".format_with(packageResult.Package.Version.to_string());
             }
 
-            if (upgradeFailures != 0 && Environment.ExitCode == 0)
+            _shimgenService.uninstall(config, packageResult);
+
+            if (!config.SkipPackageInstallProvider)
             {
-                Environment.ExitCode = 1;
+                _powershellService.uninstall(config, packageResult);
             }
 
-            return packageUpgrades;
-        }
+            _autoUninstallerService.run(packageResult, config);
 
-        public void uninstall_noop(ChocolateyConfiguration config)
-        {
-            _nugetService.uninstall_noop(config, (pkg) => { _powershellService.uninstall_noop(pkg); });
-        }
-
-        public ConcurrentDictionary<string, PackageResult> uninstall_run(ChocolateyConfiguration config)
-        {
-            this.Log().Info(@"Uninstalling the following packages:");
-            this.Log().Info(ChocolateyLoggers.Important, @"{0}".format_with(config.PackageNames));
-
-            var packageUninstalls = _nugetService.uninstall_run(
-                config,
-                (packageResult) =>
-                    {
-                        if (!_fileSystem.directory_exists(packageResult.InstallLocation))
-                        {
-                            packageResult.InstallLocation += ".{0}".format_with(packageResult.Package.Version.to_string());
-                        }
-
-                        _shimgenService.uninstall(config, packageResult);
-
-                        if (!config.SkipPackageInstallProvider)
-                        {
-                            _powershellService.uninstall(config, packageResult);
-                        }
-
-                        _autoUninstallerService.run(packageResult, config);
-
-                        if (packageResult.Success)
-                        {
-                            //todo: v2 clean up package information store for things no longer installed (call it compact?)
-                            _packageInfoService.remove_package_information(packageResult.Package);
-                        }
-
-                        //todo:prevent reboots
-                    });
-
-            var uninstallFailures = packageUninstalls.Count(p => !p.Value.Success);
-            this.Log().Warn(() => @"{0}{1} uninstalled {2}/{3} packages. {4} packages failed.{0}See the log for details.".format_with(
-                Environment.NewLine,
-                ApplicationParameters.Name,
-                packageUninstalls.Count(p => p.Value.Success && !p.Value.Inconclusive),
-                packageUninstalls.Count,
-                uninstallFailures));
-
-            if (uninstallFailures != 0)
+            if (packageResult.Success)
             {
-                this.Log().Error("Failures");
-                foreach (var failure in packageUninstalls.Where(p => !p.Value.Success).or_empty_list_if_null())
-                {
-                    this.Log().Error(" - {0}".format_with(failure.Value.Name));
-                }
+                //todo: v2 clean up package information store for things no longer installed (call it compact?)
+                _packageInfoService.remove_package_information(packageResult.Package);
             }
 
-            if (uninstallFailures != 0 && Environment.ExitCode == 0)
-            {
-                Environment.ExitCode = 1;
-            }
-
-            return packageUninstalls;
+            //todo:prevent reboots
         }
 
         private void ensure_bad_package_path_is_clean(ChocolateyConfiguration config, PackageResult packageResult)
