@@ -42,7 +42,7 @@ namespace chocolatey.infrastructure.app.services
         private readonly IAutomaticUninstallerService _autoUninstallerService;
         private readonly IXmlService _xmlService;
 
-        public ChocolateyPackageService(INugetService nugetService, IPowershellService powershellService, IShimGenerationService shimgenService, IFileSystem fileSystem, IRegistryService registryService, IChocolateyPackageInformationService packageInfoService, IAutomaticUninstallerService autoUninstallerService, IXmlService xmlService)
+        public ChocolateyPackageService(INugetService nugetService, IEnumerable<ISourceRunner> sourceRunners, IPowershellService powershellService, IShimGenerationService shimgenService, IFileSystem fileSystem, IRegistryService registryService, IChocolateyPackageInformationService packageInfoService, IAutomaticUninstallerService autoUninstallerService, IXmlService xmlService)
         {
             _nugetService = nugetService;
             _sourceRunners = sourceRunners;

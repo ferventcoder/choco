@@ -228,9 +228,10 @@ namespace chocolatey.infrastructure.app.services
             return packageInstalls;
         }
 
-        public void upgrade_noop(ChocolateyConfiguration config, Action<PackageResult> continueAction)
+        public ConcurrentDictionary<string, PackageResult> upgrade_noop(ChocolateyConfiguration config, Action<PackageResult> continueAction)
         {
             this.Log().Warn(ChocolateyLoggers.Important, "{0} does not implement upgrade".format_with(_appName));
+            return new ConcurrentDictionary<string, PackageResult>();
         }
 
         public ConcurrentDictionary<string, PackageResult> upgrade_run(ChocolateyConfiguration config, Action<PackageResult> continueAction)
