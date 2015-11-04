@@ -159,5 +159,23 @@ namespace chocolatey.infrastructure.logging
 
             }
         }
+        
+        public static void set_layout_xml(bool enableXml)
+        {
+            if (enableXml)
+            {
+                ILoggerRepository logRepository = LogManager.GetRepository(Assembly.GetCallingAssembly().UnderlyingType);
+                foreach (var append in logRepository.GetAppenders())
+                {
+
+                    var appender = append as AppenderSkeleton;
+                    if (appender != null && appender.GetType() == typeof(ManagedColoredConsoleAppender))
+                    {
+                        appender.Layout = new XmlLayout();
+                    }
+                }
+
+            }
+        }
     }
 }
