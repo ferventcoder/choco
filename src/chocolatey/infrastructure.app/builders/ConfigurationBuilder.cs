@@ -190,6 +190,7 @@ namespace chocolatey.infrastructure.app.builders
             config.Features.FailOnStandardError = set_feature_flag(ApplicationParameters.Features.FailOnStandardError, configFileSettings, defaultEnabled: false, description: "Fail if install provider writes to stderr.");
             config.Features.UsePowerShellHost = set_feature_flag(ApplicationParameters.Features.UsePowerShellHost, configFileSettings, defaultEnabled: true, description: "Use Chocolatey's built-in PowerShell host.");
             config.PromptForConfirmation = !set_feature_flag(ApplicationParameters.Features.AllowGlobalConfirmation, configFileSettings, defaultEnabled: false, description: "Prompt for confirmation in scripts or bypass.");
+            config.Features.RunAsNonAdministrator = !set_feature_flag(ApplicationParameters.Features.RunAsNonAdministrator, configFileSettings, defaultEnabled: false, description: "Run as a non-administrator.");
         }
 
         private static bool set_feature_flag(string featureName, ConfigFileSettings configFileSettings, bool defaultEnabled, string description)
