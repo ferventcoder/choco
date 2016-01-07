@@ -83,6 +83,7 @@
     </Compile>
     <Compile Include="AssemblyExtensions.cs" />
     <Compile Include="ByteExtensions.cs" />
+    <Compile Include="infrastructure.app\domain\PEHeader.cs" />
     <Compile Include="infrastructure\commandline\ReadKeyTimeout.cs" />
     <Compile Include="infrastructure\commands\Execute.cs" />
     <Compile Include="GetChocolatey.cs" />
