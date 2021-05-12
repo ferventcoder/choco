@@ -83,7 +83,7 @@ namespace chocolatey.infrastructure.app.builders
             // must be done last for overrides
             set_licensed_options(config, license, configFileSettings);
             // save all changes if there are any
-            set_config_file_settings(configFileSettings, xmlService, config);
+            set_config_file_settings(configFileSettings, xmlService, config, notifyWarnLoggingAction);
             set_hash_provider(config, container);
         }
 
@@ -95,16 +95,23 @@ namespace chocolatey.infrastructure.app.builders
             return xmlService.deserialize<ConfigFileSettings>(globalConfigPath);
         }
 
-        private static void set_config_file_settings(ConfigFileSettings configFileSettings, IXmlService xmlService, ChocolateyConfiguration config)
+        private static void set_config_file_settings(ConfigFileSettings configFileSettings, IXmlService xmlService, ChocolateyConfiguration config, Action<string> notifyWarnLoggingAction)
         {
             var shouldLogSilently = (!config.Information.IsProcessElevated || !config.Information.IsUserAdministrator);
 
             var globalConfigPath = ApplicationParameters.GlobalConfigFileLocation;
             // save so all updated configuration items get set to existing config
+
+            // we've set trace at this point - let's capture things at warning level and above
+            if (config.Trace)
+            {
+                shouldLogSilently = false;
+            }
+
             FaultTolerance.try_catch_with_logging_exception(
                 () => xmlService.serialize(configFileSettings, globalConfigPath, isSilent: shouldLogSilently),
                 "Error updating '{0}'. Please ensure you have permissions to do so".format_with(globalConfigPath),
-                logDebugInsteadOfError: true,
+                logDebugInsteadOfError: !config.Trace,
                 isSilent:shouldLogSilently);
         }
 

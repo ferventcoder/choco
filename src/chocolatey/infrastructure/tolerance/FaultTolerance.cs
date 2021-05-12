@@ -80,6 +80,7 @@ namespace chocolatey.infrastructure.tolerance
         {
             if (function == null) return default(T);
             if (numberOfTries == 0) throw new ApplicationException("You must specify a number of tries greater than zero.");
+            if (numberOfTries == 1) "chocolatey".Log().Warn("The number of tries is 1, which means that the retry will not retry if there is a failure.");
             var returnValue = default(T);
 
             var debugging = log_is_in_debug_mode();

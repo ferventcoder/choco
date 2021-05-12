@@ -623,7 +623,7 @@ Please see https://docs.chocolatey.org/en-us/troubleshooting for more
                         string failLogMessage = "{0} is not installed. Cannot upgrade a non-existent package.".format_with(packageName);
                         var result = packageInstalls.GetOrAdd(packageName, new PackageResult(packageName, null, null));
                         result.Messages.Add(new ResultMessage(ResultType.Error, failLogMessage));
-                        if (config.RegularOutput) this.Log().Error(ChocolateyLoggers.Important, failLogMessage);
+                        if (config.RegularOutput) this.Log().Error(config.QuietOutput ? ChocolateyLoggers.LogFileOnly : ChocolateyLoggers.Important, failLogMessage);
 
                         continue;
                     }
@@ -633,14 +633,14 @@ Please see https://docs.chocolatey.org/en-us/troubleshooting for more
                         string warnLogMessage = "{0} is not installed and skip non-installed option selected. Skipping...".format_with(packageName);
                         var result = packageInstalls.GetOrAdd(packageName, new PackageResult(packageName, null, null));
                         result.Messages.Add(new ResultMessage(ResultType.Warn, warnLogMessage));
-                        if (config.RegularOutput) this.Log().Warn(ChocolateyLoggers.Important, warnLogMessage);
+                        if (config.RegularOutput) this.Log().Warn(config.QuietOutput ? ChocolateyLoggers.LogFileOnly : ChocolateyLoggers.Important, warnLogMessage);
 
                         continue;
                     }
 
                     string logMessage = @"{0} is not installed. Installing...".format_with(packageName);
 
-                    if (config.RegularOutput) this.Log().Warn(ChocolateyLoggers.Important, logMessage);
+                    if (config.RegularOutput) this.Log().Warn(config.QuietOutput ? ChocolateyLoggers.LogFileOnly : ChocolateyLoggers.Important, logMessage);
 
                     var packageNames = config.PackageNames;
                     config.PackageNames = packageName;
@@ -674,7 +674,7 @@ Please see https://docs.chocolatey.org/en-us/troubleshooting for more
                     string logMessage = "A newer version of {0} (v{1}) is already installed.{2} Use --allow-downgrade or --force to attempt to upgrade to older versions, or use side by side to allow multiple versions.".format_with(installedPackage.Id, installedPackage.Version, Environment.NewLine);
                     var nullResult = packageInstalls.GetOrAdd(packageName, new PackageResult(installedPackage, _fileSystem.combine_paths(ApplicationParameters.PackagesLocation, installedPackage.Id)));
                     nullResult.Messages.Add(new ResultMessage(ResultType.Error, logMessage));
-                    this.Log().Error(ChocolateyLoggers.Important, logMessage);
+                    this.Log().Error(config.QuietOutput ? ChocolateyLoggers.LogFileOnly : ChocolateyLoggers.Important, logMessage);
                     continue;
                 }
 
@@ -700,7 +700,7 @@ Please see https://docs.chocolatey.org/en-us/troubleshooting for more
                     if (config.UpgradeCommand.FailOnUnfound)
                     {
                         unfoundResult.Messages.Add(new ResultMessage(ResultType.Error, logMessage));
-                        if (config.RegularOutput) this.Log().Error(ChocolateyLoggers.Important, "{0}{1}".format_with(Environment.NewLine, logMessage));
+                        if (config.RegularOutput) this.Log().Error(config.QuietOutput ? ChocolateyLoggers.LogFileOnly : ChocolateyLoggers.Important, "{0}{1}".format_with(Environment.NewLine, logMessage));
                     }
                     else
                     {
@@ -708,12 +708,12 @@ Please see https://docs.chocolatey.org/en-us/troubleshooting for more
                         unfoundResult.Messages.Add(new ResultMessage(ResultType.Inconclusive, logMessage));
                         if (config.RegularOutput)
                         {
-                            this.Log().Warn(ChocolateyLoggers.Important, "{0}{1}".format_with(Environment.NewLine, logMessage));
+                            this.Log().Warn(config.QuietOutput ? ChocolateyLoggers.LogFileOnly : ChocolateyLoggers.Important, "{0}{1}".format_with(Environment.NewLine, logMessage));
                         }
                         else
                         {
                             //last one is whether this package is pinned or not
-                            this.Log().Info("{0}|{1}|{1}|{2}".format_with(installedPackage.Id, installedPackage.Version, isPinned.to_string().to_lower()));
+                            this.Log().Info(config.QuietOutput ? ChocolateyLoggers.LogFileOnly : ChocolateyLoggers.Normal, "{0}|{1}|{1}|{2}".format_with(installedPackage.Id, installedPackage.Version, isPinned.to_string().to_lower()));
                         }
                     }
 
@@ -736,11 +736,11 @@ Please see https://docs.chocolatey.org/en-us/troubleshooting for more
                     {
                         if (config.RegularOutput)
                         {
-                            this.Log().Info(ChocolateyLoggers.Important, logMessage);
+                            this.Log().Info(config.QuietOutput ? ChocolateyLoggers.LogFileOnly : ChocolateyLoggers.Important, logMessage);
                         }
                         else
                         {
-                            this.Log().Info("{0}|{1}|{1}|{2}".format_with(installedPackage.Id, installedPackage.Version, isPinned.to_string().to_lower()));
+                            this.Log().Info(config.QuietOutput ? ChocolateyLoggers.LogFileOnly : ChocolateyLoggers.Normal, "{0}|{1}|{1}|{2}".format_with(installedPackage.Id, installedPackage.Version, isPinned.to_string().to_lower()));
                         }
                     }
 
@@ -762,11 +762,11 @@ Please see https://docs.chocolatey.org/en-us/troubleshooting for more
                         {
                             if (config.RegularOutput)
                             {
-                                this.Log().Info(logMessage);
+                                this.Log().Info(config.QuietOutput ? ChocolateyLoggers.LogFileOnly : ChocolateyLoggers.Normal, logMessage);
                             }
                             else
                             {
-                                this.Log().Info("{0}|{1}|{2}|{3}".format_with(installedPackage.Id, installedPackage.Version, availablePackage.Version, isPinned.to_string().to_lower()));
+                                this.Log().Info(config.QuietOutput ? ChocolateyLoggers.LogFileOnly : ChocolateyLoggers.Normal, "{0}|{1}|{2}|{3}".format_with(installedPackage.Id, installedPackage.Version, availablePackage.Version, isPinned.to_string().to_lower()));
                             }
                         }
 
@@ -774,7 +774,7 @@ Please see https://docs.chocolatey.org/en-us/troubleshooting for more
                     }
 
                     packageResult.Messages.Add(new ResultMessage(ResultType.Note, logMessage));
-                    if (config.RegularOutput) this.Log().Info(logMessage);
+                    if (config.RegularOutput) this.Log().Info(config.QuietOutput ? ChocolateyLoggers.LogFileOnly : ChocolateyLoggers.Normal, logMessage);
                 }
 
                 if ((availablePackage.Version > installedPackage.Version) || config.Force || (availablePackage.Version < installedPackage.Version && config.AllowDowngrade))
@@ -786,11 +786,11 @@ Please see https://docs.chocolatey.org/en-us/troubleshooting for more
 
                         if (config.RegularOutput)
                         {
-                            this.Log().Warn("{0}{1}".format_with(Environment.NewLine, logMessage));
+                            this.Log().Warn(config.QuietOutput ? ChocolateyLoggers.LogFileOnly : ChocolateyLoggers.Normal, "{0}{1}".format_with(Environment.NewLine, logMessage));
                         }
                         else
                         {
-                            this.Log().Info("{0}|{1}|{2}|{3}".format_with(installedPackage.Id, installedPackage.Version, availablePackage.Version, isPinned.to_string().to_lower()));
+                            this.Log().Info(config.QuietOutput ? ChocolateyLoggers.LogFileOnly : ChocolateyLoggers.Normal, "{0}|{1}|{2}|{3}".format_with(installedPackage.Id, installedPackage.Version, availablePackage.Version, isPinned.to_string().to_lower()));
                         }
                     }
 
@@ -799,7 +799,7 @@ Please see https://docs.chocolatey.org/en-us/troubleshooting for more
                         string logMessage = "{0} is pinned. Skipping pinned package.".format_with(packageName);
                         packageResult.Messages.Add(new ResultMessage(ResultType.Warn, logMessage));
                         packageResult.Messages.Add(new ResultMessage(ResultType.Inconclusive, logMessage));
-                        if (config.RegularOutput) this.Log().Warn(ChocolateyLoggers.Important, logMessage);
+                        if (config.RegularOutput) this.Log().Warn(config.QuietOutput ? ChocolateyLoggers.LogFileOnly : ChocolateyLoggers.Important, logMessage);
 
                         continue;
                     }
@@ -855,7 +855,7 @@ Please see https://docs.chocolatey.org/en-us/troubleshooting for more
                             }
 
                             var logMessage = "{0} not upgraded. An error occurred during installation:{1} {2}".format_with(packageName, Environment.NewLine, message);
-                            this.Log().Error(ChocolateyLoggers.Important, logMessage);
+                            this.Log().Error(config.QuietOutput ? ChocolateyLoggers.LogFileOnly : ChocolateyLoggers.Important, logMessage);
                             packageResult.Messages.Add(new ResultMessage(ResultType.Error, logMessage));
                             if (packageResult.ExitCode == 0) packageResult.ExitCode = 1;
                             if (continueAction != null) continueAction.Invoke(packageResult);
@@ -924,7 +924,7 @@ Please see https://docs.chocolatey.org/en-us/troubleshooting for more
                     unfoundResult.Messages.Add(new ResultMessage(ResultType.Warn, unfoundLogMessage));
                     unfoundResult.Messages.Add(new ResultMessage(ResultType.Inconclusive, unfoundLogMessage));
 
-                    this.Log().Warn("{0}|{1}|{1}|{2}".format_with(installedPackage.Id, installedPackage.Version, isPinned.to_string().to_lower()));
+                    this.Log().Warn(config.QuietOutput ? ChocolateyLoggers.LogFileOnly : ChocolateyLoggers.Normal, "{0}|{1}|{1}|{2}".format_with(installedPackage.Id, installedPackage.Version, isPinned.to_string().to_lower()));
                     continue;
                 }
 
@@ -935,7 +935,7 @@ Please see https://docs.chocolatey.org/en-us/troubleshooting for more
                 string logMessage = "You have {0} v{1} installed. Version {2} is available based on your source(s).{3} Source(s): \"{4}\"".format_with(installedPackage.Id, installedPackage.Version, latestPackage.Version, Environment.NewLine, config.Sources);
                 packageResult.Messages.Add(new ResultMessage(ResultType.Note, logMessage));
 
-                this.Log().Info("{0}|{1}|{2}|{3}".format_with(installedPackage.Id, installedPackage.Version, latestPackage.Version, isPinned.to_string().to_lower()));
+                this.Log().Info(config.QuietOutput ? ChocolateyLoggers.LogFileOnly : ChocolateyLoggers.Normal, "{0}|{1}|{2}|{3}".format_with(installedPackage.Id, installedPackage.Version, latestPackage.Version, isPinned.to_string().to_lower()));
             }
 
             return outdatedPackages;

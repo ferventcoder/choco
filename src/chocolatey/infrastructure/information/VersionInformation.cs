@@ -31,6 +31,14 @@ namespace chocolatey.infrastructure.information
             {
                 version = FileVersionInfo.GetVersionInfo(location).FileVersion;
             }
+            else
+            {
+                var assemblyName = assembly.UnderlyingType.GetName();
+                if (assemblyName != null)
+                {
+                    version = assemblyName.Version.to_string();
+                }
+            }
 
             return version;
         } 

@@ -22,6 +22,8 @@ namespace chocolatey.infrastructure.services
     using System.Text;
     using System.Xml;
     using System.Xml.Serialization;
+    using app.configuration;
+    using configuration;
     using cryptography;
     using filesystem;
     using logging;
@@ -35,12 +37,19 @@ namespace chocolatey.infrastructure.services
     {
         private readonly IFileSystem _fileSystem;
         private readonly IHashProvider _hashProvider;
+        private readonly ChocolateyConfiguration _configuration;
         private const int MUTEX_TIMEOUT = 2000;
 
         public XmlService(IFileSystem fileSystem, IHashProvider hashProvider)
+            : this(fileSystem, hashProvider, Config.get_configuration_settings())
+        {
+        }
+
+        public XmlService(IFileSystem fileSystem, IHashProvider hashProvider, ChocolateyConfiguration configuration)
         {
             _fileSystem = fileSystem;
             _hashProvider = hashProvider;
+            _configuration = configuration;
         }
 
         public XmlType deserialize<XmlType>(string xmlFilePath)
@@ -148,7 +157,8 @@ namespace chocolatey.infrastructure.services
                         {
                             AutoFlush = true
                         }
-                        ){
+                        )
+                        {
                             xmlSerializer.Serialize(streamWriter, xmlType);
                             streamWriter.Flush();
 
@@ -173,6 +183,15 @@ namespace chocolatey.infrastructure.services
                                     return;
                                 }
 
+                                StreamReader streamReader = null;
+                                if (_configuration.Trace)
+                                {
+                                    this.Log().Warn("Original File:{0} {1}{0}".format_with(Environment.NewLine, _fileSystem.read_file(xmlFilePath)));
+                                    memoryStream.Position = 0;
+                                    streamReader = new StreamReader(memoryStream, encoding: new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+                                    this.Log().Warn("New File:{0} {1}{0}".format_with(Environment.NewLine, streamReader.ReadToEnd()));
+                                }
+
                                 // Otherwise, create an update file, and resiliently move it into place.
                                 var tempUpdateFile = xmlFilePath + "." + Process.GetCurrentProcess().Id + ".update";
                                 this.Log().Trace("Creating a temp file at '{0}'".format_with(tempUpdateFile));
@@ -182,6 +201,12 @@ namespace chocolatey.infrastructure.services
 
                                 memoryStream.Close();
                                 streamWriter.Close();
+                                if (streamReader != null)
+                                {
+                                    streamReader.Close();
+                                    streamReader.Dispose();
+                                }
+                                
 
                                 this.Log().Trace("Replacing file '{0}' with '{1}'.".format_with(xmlFilePath, tempUpdateFile));
                                 _fileSystem.replace_file(tempUpdateFile, xmlFilePath, xmlFilePath + ".backup");

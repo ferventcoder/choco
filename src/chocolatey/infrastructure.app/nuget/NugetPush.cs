@@ -51,6 +51,13 @@ namespace chocolatey.infrastructure.app.nuget
             catch (InvalidOperationException ex)
             {
                 var message = ex.Message;
+                var innerExceptionMessage = string.Empty;
+                if (ex.InnerException != null)
+                {
+                    innerExceptionMessage = ex.InnerException.Message;
+                //////////////////    ROB PICK UP HERE
+                }
+
                 if (!string.IsNullOrWhiteSpace(message) && (message.Contains("(406)") || message.Contains("(409)")))
                 {
                     throw new ApplicationException("An error has occurred. It's possible the package version already exists on the repository.", ex);

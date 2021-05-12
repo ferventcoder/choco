@@ -84,10 +84,10 @@ namespace chocolatey.infrastructure.app.nuget
                 }
             }
 
-            if (configuration.ListCommand.Page.HasValue)
-            {
-                results = results.Skip(configuration.ListCommand.PageSize * configuration.ListCommand.Page.Value).Take(configuration.ListCommand.PageSize);
-            }
+            //if (configuration.ListCommand.Page.HasValue)
+            //{
+            //    results = results.Skip(configuration.ListCommand.PageSize * configuration.ListCommand.Page.Value).Take(configuration.ListCommand.PageSize);
+            //}
 
             if (configuration.ListCommand.ByIdOnly)
             {
@@ -127,14 +127,28 @@ namespace chocolatey.infrastructure.app.nuget
 
             if (configuration.AllVersions || !string.IsNullOrWhiteSpace(configuration.Version))
             {
+
+                //results = configuration.Prerelease
+                //    ? results
+                //    : results.Where(p => p.IsReleaseVersion());
+                    
+
                 if (isServiceBased)
                 {
-                    return results.OrderBy(p => p.Id).ThenByDescending(p => p.Version);
+                    results = configuration.ListCommand.Exact ? 
+                          results.OrderByDescending(p => p.Version) 
+                        : results.OrderBy(p => p.Id).ThenByDescending(p => p.Version);
                 }
                 else
                 {
-                    return results.Where(PackageExtensions.IsListed).OrderBy(p => p.Id).ThenByDescending(p => p.Version).AsQueryable();
+                    results = configuration.ListCommand.Exact ?
+                          results.Where(PackageExtensions.IsListed).OrderByDescending(p => p.Version).AsQueryable()
+                        : results.Where(PackageExtensions.IsListed).OrderBy(p => p.Id).ThenByDescending(p => p.Version).AsQueryable();
                 }
+
+                return configuration.ListCommand.Page.HasValue ?
+                      results.Skip(configuration.ListCommand.PageSize * configuration.ListCommand.Page.Value).Take(configuration.ListCommand.PageSize) 
+                    : results;
             }
 
             if (configuration.Prerelease && packageRepository.SupportsPrereleasePackages)
@@ -160,7 +174,13 @@ namespace chocolatey.infrastructure.app.nuget
                  results.OrderByDescending(p => p.DownloadCount).ThenBy(p => p.Id)
                  : results;
 
-            return results;
+            var packages = (configuration.ListCommand.Page.HasValue ?
+                results.Skip(configuration.ListCommand.PageSize * configuration.ListCommand.Page.Value).Take(configuration.ListCommand.PageSize) 
+                : results).ToList();
+
+            return configuration.ListCommand.Page.HasValue ?
+                results.Skip(configuration.ListCommand.PageSize * configuration.ListCommand.Page.Value).Take(configuration.ListCommand.PageSize) 
+                : results;
         }
 
         /// <summary>

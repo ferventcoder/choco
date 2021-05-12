@@ -18,6 +18,8 @@ namespace chocolatey
 {
     using System;
     using System.Collections.Generic;
+    using System.ComponentModel;
+    using System.IO;
     using System.Reflection;
     using infrastructure.licensing;
     using SimpleInjector;
@@ -35,8 +37,10 @@ namespace chocolatey
     using resources;
 #endif
     using Assembly = infrastructure.adapters.Assembly;
+    using Container = SimpleInjector.Container;
     using IFileSystem = infrastructure.filesystem.IFileSystem;
     using ILog = infrastructure.logging.ILog;
+    using License = infrastructure.licensing.License;
 
     // ReSharper disable InconsistentNaming
 
@@ -47,16 +51,21 @@ namespace chocolatey
     {
         private static readonly log4net.ILog _logger = LogManager.GetLogger(typeof(Lets));
 
-        private static GetChocolatey set_up()
+        private static GetChocolatey set_up(bool initializeLogging)
         {
             add_assembly_resolver();
 
-            return new GetChocolatey();
+            return new GetChocolatey(initializeLogging);
         }
 
         public static GetChocolatey GetChocolatey()
         {
-            return GlobalMutex.enter(() => set_up(), 10);
+            return GetChocolatey(initializeLogging: true);
+        }
+
+        public static GetChocolatey GetChocolatey(bool initializeLogging)
+        {
+            return GlobalMutex.enter(() => set_up(initializeLogging), 10);
         }
 
         private static ResolveEventHandler _handler = null;
@@ -116,18 +125,61 @@ namespace chocolatey
         private readonly Container _container;
         private readonly ChocolateyLicense _license;
         private readonly LogSinkLog _logSinkLogger = new LogSinkLog();
+        private readonly string _verboseAppenderName = "{0}LoggingColoredConsoleAppender".format_with(ChocolateyLoggers.Verbose.to_string());
+        private readonly string _traceAppenderName = "{0}LoggingColoredConsoleAppender".format_with(ChocolateyLoggers.Trace.to_string());
+
         private Action<ChocolateyConfiguration> _propConfig;
+        
+        private static ChocolateyConfiguration _baseChocolateyConfiguration;
+        private static bool _allowSettingBaseConfiguration = true;
+
+
 
         /// <summary>
         /// Initializes a new instance of the <see cref="GetChocolatey"/> class.
         /// </summary>
-        public GetChocolatey()
+        public GetChocolatey(): this(initializeLogging:true) {}
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="GetChocolatey"/> class.
+        /// </summary>
+        /// <param name="initializeLogging">if set to <c>true</c> will initialize logging instances for Log4Net.</param>
+        public GetChocolatey(bool initializeLogging)
         {
-            Log4NetAppenderConfiguration.configure(null, excludeLoggerNames: ChocolateyLoggers.Trace.to_string());
-            Bootstrap.initialize();
-            Log.InitializeWith(new AggregateLog(new List<ILog>() { new Log4NetLog(), _logSinkLogger }));
+            if (initializeLogging)
+            {
+                string loggingLocation = ApplicationParameters.LoggingLocation;
+                //no file system at this point
+                if (!Directory.Exists(loggingLocation)) Directory.CreateDirectory(loggingLocation);
+
+                Log4NetAppenderConfiguration.configure(loggingLocation, excludeLoggerNames: ChocolateyLoggers.Trace.to_string());
+                Log.InitializeWith(new AggregateLog(new List<ILog>() { new Log4NetLog(), _logSinkLogger }));
+                "chocolatey".Log().Debug("XmlConfiguration is now operational");
+            }
+            
             _license = License.validate_license();
             _container = SimpleInjectorContainer.Container;
+        }
+
+        public GetChocolatey TurnOnDebugLoggingLog4Net()
+        {
+            Log4NetAppenderConfiguration.set_logging_level_debug_when_debug(true, _verboseAppenderName, _traceAppenderName);
+
+            return this;
+        }
+
+        public GetChocolatey TurnOnVerboseLoggingLog4Net()
+        {
+            Log4NetAppenderConfiguration.set_verbose_logger_when_verbose(true, true, _verboseAppenderName);
+
+            return this;
+        }
+
+        public GetChocolatey TurnOnTraceLoggingLog4Net()
+        {
+            Log4NetAppenderConfiguration.set_trace_logger_when_trace(true, _traceAppenderName);
+
+            return this;
         }
 
         /// <summary>
@@ -137,11 +189,28 @@ namespace chocolatey
         /// <returns>This <see cref="GetChocolatey"/> instance</returns>
         public GetChocolatey SetCustomLogging(ILog logger)
         {
-            Log.InitializeWith(logger, resetLoggers: false);
-            drain_log_sink(logger);
-            return this;
+            return SetCustomLogging(logger, logExistingMessages: true, addToExistingLoggers:false);
         }
 
+        public GetChocolatey SetCustomLogging(ILog logger, bool logExistingMessages)
+        {
+            return SetCustomLogging(logger, logExistingMessages: logExistingMessages, addToExistingLoggers: false);
+        }  
+        
+        public GetChocolatey SetCustomLogging(ILog logger, bool logExistingMessages, bool addToExistingLoggers)
+        {
+            var aggregateLog = new AggregateLog(new List<ILog>() { logger});
+            if (addToExistingLoggers)
+            {
+                aggregateLog = new AggregateLog(new List<ILog>() { logger, Log.GetLoggerFor("chocolatey") });
+            }
+
+            Log.InitializeWith(aggregateLog, resetLoggers: false);
+            if (logExistingMessages) drain_log_sink(logger);
+
+            return this;
+        }
+        
         private void drain_log_sink(ILog logger)
         {
             foreach (var logMessage in _logSinkLogger.Messages.or_empty_list_if_null())
@@ -169,7 +238,8 @@ namespace chocolatey
                 }
             }
 
-            _logSinkLogger.Messages.Clear();
+            _logSinkLogger.ClearLogger();
+            _logSinkLogger.StopLogging();
         }
 
         /// <summary>
@@ -306,6 +376,8 @@ namespace chocolatey
                     runner.run(config, _container, isConsole: false, parseArgs: command =>
                     {
                         command.handle_validation(config);
+
+                        //todo: add validation checks here
                     });
                 });
         }
@@ -406,6 +478,52 @@ namespace chocolatey
             return configuration;
         }
 
+        /// <summary>
+        /// Gets the configuration. ONLY USE THIS IF YOU KNOW WHAT YOU ARE DOING.
+        /// Unlike GetConfiguration(), which is considered safe, this finalizes
+        /// and returns the configuration. If you use this, you will need to call
+        /// ResetConfiguration() between other calls if you plan to reuse the
+        /// Chocolatey object.
+        /// </summary>
+        /// <returns></returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public ChocolateyConfiguration GetConfigurationAdvanced()
+        {
+            ensure_environment();
+
+            set_base_configuration();
+
+            var configuration = create_configuration(new List<string>());
+
+            //TODO: RR - do we need these or not?
+            var verboseAppenderName = "{0}LoggingColoredConsoleAppender".format_with(ChocolateyLoggers.Verbose.to_string());
+            var traceAppenderName = "{0}LoggingColoredConsoleAppender".format_with(ChocolateyLoggers.Trace.to_string());
+            Log4NetAppenderConfiguration.set_logging_level_debug_when_debug(configuration.Debug, verboseAppenderName, traceAppenderName);
+            Log4NetAppenderConfiguration.set_verbose_logger_when_verbose(configuration.Verbose, configuration.Debug, verboseAppenderName);
+            Log4NetAppenderConfiguration.set_trace_logger_when_trace(configuration.Trace, traceAppenderName);
+
+            return configuration;
+        }
+
+        private void set_base_configuration()
+        {
+            if (_allowSettingBaseConfiguration)
+            {
+                _baseChocolateyConfiguration = Config.get_configuration_settings().deep_copy();
+                _allowSettingBaseConfiguration = false;
+            }
+        }
+
+        /// <summary>
+        /// Resets the configuration. Call this prior to each run or change of anything.
+        /// </summary>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public void ResetConfiguration()
+        {
+            Config.initialize_with(_baseChocolateyConfiguration);
+            _allowSettingBaseConfiguration = true;
+        }
+
         private void ensure_original_configuration(IList<string> args, Action<ChocolateyConfiguration> action)
         {
             var success = ensure_original_configuration(args,
@@ -429,20 +547,20 @@ namespace chocolatey
         private T ensure_original_configuration<T>(IList<string> args, Func<ChocolateyConfiguration, T> function)
         {
             var originalConfig = Config.get_configuration_settings().deep_copy();
+            set_base_configuration();
+
             var configuration = create_configuration(args);
             var returnValue = default(T);
             try
             {
+                Log4NetAppenderConfiguration.set_logging_level_debug_when_debug(configuration.Debug, _verboseAppenderName, _traceAppenderName);
+                Log4NetAppenderConfiguration.set_verbose_logger_when_verbose(configuration.Verbose, configuration.Debug, _verboseAppenderName);
+                Log4NetAppenderConfiguration.set_trace_logger_when_trace(configuration.Trace, _traceAppenderName);
+
                 if (function != null)
                 {
                     returnValue = function.Invoke(configuration);
                 }
-
-                var verboseAppenderName = "{0}LoggingColoredConsoleAppender".format_with(ChocolateyLoggers.Verbose.to_string());
-                var traceAppenderName = "{0}LoggingColoredConsoleAppender".format_with(ChocolateyLoggers.Trace.to_string());
-                Log4NetAppenderConfiguration.set_logging_level_debug_when_debug(configuration.Debug, verboseAppenderName, traceAppenderName);
-                Log4NetAppenderConfiguration.set_verbose_logger_when_verbose(configuration.Verbose, configuration.Debug, verboseAppenderName);
-                Log4NetAppenderConfiguration.set_trace_logger_when_trace(configuration.Trace, traceAppenderName);
             }
             finally
             {
